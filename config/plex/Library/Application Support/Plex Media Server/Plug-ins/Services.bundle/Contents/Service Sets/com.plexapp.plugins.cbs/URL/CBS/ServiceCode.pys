@@ -1,0 +1,135 @@
+RE_PID = Regex("video\.settings\.pid = '(?P<pid>[^']+)';")
+VIDEO_XML = 'http://link.theplatform.com/s/dJ5BDC/%s?format=SMIL&Tracking=true&mbr=true'
+SMIL_NS = {'a': 'http://www.w3.org/2005/SMIL21/Language'}
+CBS_SWF = 'http://can.cbs.com/thunder/player/chrome/cbscom/prod/vod/canplayer.swf'
+
+####################################################################################################
+def NormalizeURL(url):
+
+	return url.split('?')[0]
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+	try:
+		page = HTTP.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; bingbot/2.0 +http://www.bing.com/bingbot.htm)"}).content
+	except:
+		raise Ex.MediaNotAvailable
+
+	pid = RE_PID.search(page)
+
+	if not pid:
+		raise Ex.MediaNotAvailable
+
+	try:
+		xml = XML.ElementFromURL(VIDEO_XML % pid.group('pid'))
+	except:
+		raise Ex.MediaNotAvailable
+
+	if len(xml.xpath('//a:ref[@title="Geographic Restriction"]', namespaces=SMIL_NS)) > 0:
+		raise Ex.MediaGeoblocked
+
+	title = xml.xpath('//a:switch[1]/a:ref/@title', namespaces=SMIL_NS)[0]
+
+	try: summary = xml.xpath('//a:switch[1]/a:ref/@abstract', namespaces=SMIL_NS)[0]
+	except: summary = None
+
+	duration = xml.xpath('//a:switch[1]/a:ref/@dur', namespaces=SMIL_NS)[0].strip('ms')
+
+	html = HTML.ElementFromString(page)
+
+	thumb = html.xpath('//meta[@property="og:image" and @content!=""]/@content|//meta[@name="twitter:image" and @content!=""]/@content')
+	if len(thumb) > 0:
+		thumb = thumb[0].replace('_140x80.jpg', '_640x360.jpg')
+	else:
+		thumb = ''
+
+	try:
+		air_date = html.xpath('//div[@class="airdate"]/text()')[0].replace('Air Date: ', '')
+		originally_available_at = Datetime.ParseDate(air_date).date()
+	except:
+		originally_available_at = None
+
+	if xml.xpath('//a:switch[1]//a:param[@name="EpisodeFlag"]/@value', namespaces=SMIL_NS)[0] == 'true':
+		show = xml.xpath('//a:switch[1]//a:param[@name="SeriesTitle"]/@value', namespaces=SMIL_NS)[0]
+		title = title.split(' - ', 1)[-1]
+
+		try:
+			season = xml.xpath('//a:switch[1]//a:param[@name="SeasonNumber"]/@value', namespaces=SMIL_NS)[0]
+			episode = xml.xpath('//a:switch[1]//a:param[@name="EpisodeNumber"]/@value', namespaces=SMIL_NS)[0]
+		except:
+			season = None
+			episode = None
+
+		return EpisodeObject(
+			show = show,
+			season = int(season) if season and season.isdigit() else None,
+			index = int(episode) if episode and episode.isdigit() else None,
+			title = title,
+			summary = summary,
+			duration = int(duration),
+			thumb = Resource.ContentsOfURLWithFallback(thumb),
+			originally_available_at = originally_available_at
+		)
+	else:
+		return VideoClipObject(
+			title = title,
+			summary = summary,
+			duration = int(duration),
+			thumb = Resource.ContentsOfURLWithFallback(thumb),
+			originally_available_at = originally_available_at
+		)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+	media_objects = []
+	resolution = ['720', '360', '360', '360']
+	bitrate = [2000, 1250, 800, 450]
+
+	for i, res in enumerate(resolution):
+		media_objects.append(
+			MediaObject(
+				video_resolution = res,
+				bitrate = bitrate[i],
+				audio_channels = 2,
+				parts = [
+					PartObject(
+						key = Callback(PlayVideo, url=url, bitrate=bitrate[i])
+					)
+				]
+			)
+		)
+
+	return media_objects
+
+####################################################################################################
+@indirect
+def PlayVideo(url, bitrate=2000, **kwargs):
+
+	try:
+		page = HTTP.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; bingbot/2.0 +http://www.bing.com/bingbot.htm)"}).content
+	except:
+		raise Ex.MediaNotAvailable
+
+	pid = RE_PID.search(page)
+
+	if not pid:
+		raise Ex.MediaNotAvailable
+
+	xml = XML.ElementFromURL(VIDEO_XML % pid.group('pid'), cacheTime=0)
+	rtmp_url = xml.xpath('//a:meta[starts-with(@base, "rtmp")]/@base', namespaces=SMIL_NS)[0]
+
+	available_bitrates = xml.xpath('//a:switch[1]/a:video/@system-bitrate', namespaces=SMIL_NS)
+	closest = min((abs(int(bitrate) - int(i)/1000), i) for i in available_bitrates)[1]
+
+	clip = xml.xpath('//a:switch[1]/a:video[@system-bitrate="%s"]/@src' % closest, namespaces=SMIL_NS)[0]
+
+	if clip[-4:] == '.mp4':
+		clip = 'mp4:%s' % clip[:-4]
+	else:
+		clip = clip.replace('.flv', '')
+
+	Log(' --> RTMPDump test command line: rtmpdump -r "%s" -y "%s" -W "%s" -o output.flv' % (rtmp_url, clip, CBS_SWF))
+
+	return IndirectResponse(VideoClipObject, key=RTMPVideoURL(url=rtmp_url, clip=clip, swf_url=CBS_SWF))

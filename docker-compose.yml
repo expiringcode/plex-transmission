@@ -1,0 +1,68 @@
+version: '3'
+services:
+  plex:
+    image: plexinc/pms-docker
+    volumes:
+      - './transcode:/app'
+      - './config/plex:/config'
+      - './media:/data'
+    ports:
+      - 32400:32400/tcp
+      - 3005:3005/tcp
+      - 8324:8324/tcp
+      - 32469:32469/tcp
+      - 1900:1900/udp
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    environment:
+      - VIRTUAL_HOST=${VIRTUAL_HOST_PLEX}
+      - VIRTUAL_PORT=32400
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_PLEX}
+      - LETSENCRYPT_HOST=${VIRTUAL_HOST_PLEX}
+      - TZ=ROME
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      - HOSTNAME=${PLEX_HOSTNAME}
+      - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+    restart: always
+    tty: true
+    networks:
+      - tier_3
+      - tier_2
+      - tier_1
+      - tier_0
+  media:
+    image: linuxserver/transmission
+    volumes:
+      - './config/ts:/config'
+      - './media:/downloads'
+      - './torrents:/watch'
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    environment:
+      - VIRTUAL_HOST=${VIRTUAL_HOST_TS}
+      - VIRTUAL_PORT=9091
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=${VIRTUAL_HOST_TS}
+      - PUID=1000
+      - PGID=1000
+      - TZ=ROME
+    restart: always
+    tty: true
+    networks:
+      - tier_3
+      - tier_1
+      - tier_0
+      - tier_2
+networks:
+  tier_2: null
+  tier_3: null
+  tier_0:
+    external:
+      name: network_tier_0
+  tier_1:
+    external:
+      name: network_tier_1

@@ -1,0 +1,164 @@
+VIDEO_INFO = 'http://teamcoco.com/api/5/apps/cvp/%s.xml'
+RE_BANDWIDTH = Regex('BANDWIDTH=(\d+)')
+FULL_EP_RES = [480]
+VIDEO_RES = [1080, 720, 480]
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+	video_id = GetVideoId(url)
+
+	if not video_id:
+		Log.Exception("Could not retrieve video_id in MetadataObjectForURL")
+		raise Ex.MediaNotAvailable
+
+	xml = XML.ElementFromURL(VIDEO_INFO % (video_id), cacheTime=CACHE_1HOUR)
+	title = xml.xpath('//headline/text()')[0]
+	summary = String.StripTags(xml.xpath('//description/text()')[0]).strip()
+
+	duration = xml.xpath('//video/@duration')
+	duration = Datetime.MillisecondsFromString(duration[0]) if len(duration) > 0 and duration[0] != "" else None
+
+	try:
+		thumb = xml.xpath('//image[@width="640"]/text()')[0]
+	except:
+		try:
+			thumb = xml.xpath('//image/text()')[-1]
+		except:
+			thumb = ''
+
+	return VideoClipObject(
+		title = String.DecodeHTMLEntities(title),
+		summary = String.DecodeHTMLEntities(summary),
+		duration = duration,
+		thumb = Resource.ContentsOfURLWithFallback(url=thumb)
+	)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+	if '/full-episode-' in url:
+
+		return [
+			MediaObject(
+				parts = [
+					PartObject(key=HTTPLiveStreamURL(Callback(PlayEpisode, url=url, res=res)))
+				],
+				video_resolution = res,
+				audio_channels = 2,
+				optimized_for_streaming = True
+			) for res in FULL_EP_RES
+		]
+
+	else:
+
+		return [
+			MediaObject(
+				parts = [
+					PartObject(key=Callback(PlayVideo, url=url, res=res))
+				],
+				container = Container.MP4,
+				video_codec = VideoCodec.H264,
+				video_resolution = res,
+				audio_codec = AudioCodec.AAC,
+				audio_channels = 2,
+				optimized_for_streaming = True
+			) for res in VIDEO_RES
+		]
+
+####################################################################################################
+def PlayEpisode(url, res, **kwargs):
+
+	if not '/full-episode-' in url:
+		raise Ex.MediaNotAvailable
+
+	video_id = GetVideoId(url)
+
+	if not video_id:
+		Log.Exception("Could not retrieve video_id in PlayEpisode")
+		raise Ex.MediaExpired
+
+	xml = XML.ElementFromURL(VIDEO_INFO % (video_id), cacheTime=CACHE_1HOUR)
+
+	if len(xml.xpath('//files/file')) < 1:
+		raise Ex.MediaNotAvailable
+
+	src = xml.xpath('//files/file[@bitrate="ipad"]/text()|//files/file[contains(text(), "ipad")]/text()')[0]
+	m3u8_url = 'http://ht.cdn.turner.com/tbs/big/teamcoco/%s' % (src.lstrip('/'))
+	base_url = m3u8_url.rsplit('/',1)[0]
+
+	try:
+		playlist = HTTP.Request(m3u8_url).content
+	except Ex.HTTPError, e:
+		if e.code == 404:
+			raise Ex.MediaNotAvailable
+
+	new_playlist = '#EXTM3U'
+	streams = []
+	bandwidth = None
+
+	for line in playlist.splitlines(False)[1:]:
+		if line.startswith('#'):
+			bandwidth = RE_BANDWIDTH.search(line)
+			previous_line = line
+			continue
+		elif len(line) < 1:
+			continue
+		else:
+			if not bandwidth:
+				continue
+			if not line.startswith('http://'):
+				line = '%s/%s' % (base_url, line)
+
+			streams.append({
+				'bandwidth': int(bandwidth.group(1)),
+				'stream': '%s\n%s' % (previous_line, line)
+			})
+
+	sorted_streams = sorted(streams, key=lambda stream: stream['bandwidth'])
+
+	# Throw away the audio-only stream
+	for stream in sorted_streams[1:]:
+		new_playlist += '\n%s' % (stream['stream'])
+
+	return new_playlist
+
+####################################################################################################
+@indirect
+def PlayVideo(url, res=720, **kwargs):
+
+	video_id = GetVideoId(url)
+
+	if not video_id:
+		Log.Exception("Could not retrieve video_id in PlayVideo")
+		raise Ex.MediaExpired
+
+	xml = XML.ElementFromURL(VIDEO_INFO % (video_id), cacheTime=CACHE_1HOUR)
+
+	if len(xml.xpath('//files/file')) < 1:
+		raise Ex.MediaNotAvailable
+
+	hd_1080 = video_url = xml.xpath('//file[@bitrate="other" and contains(., "1080")]/text()')
+	hd_720 = video_url = xml.xpath('//file[@bitrate="hd"]/text()')
+	sd_360 = video_url = xml.xpath('//file[@bitrate="embed"]/text()')
+
+	if res == 1080 and len(hd_1080) > 0:
+		video_url = hd_1080[0]
+	elif res in [1080, 720] and len(hd_720) > 0:
+		video_url = hd_720[0]
+	elif len(sd_360) > 0:
+		video_url = sd_360[0]
+	else:
+		raise Ex.MediaNotAvailable
+
+	return IndirectResponse(VideoClipObject, key=video_url)
+
+####################################################################################################
+def GetVideoId(url):
+
+	video_id = HTML.ElementFromURL(url, cacheTime=CACHE_1HOUR).xpath('//meta[@property="al:ios:url"]/@content')
+
+	if len(video_id) > 0:
+		return video_id[0].split('=')[-1]
+	else:
+		raise Ex.MediaNotAvailable

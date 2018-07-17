@@ -1,0 +1,81 @@
+RE_VIDEO_ID = Regex("id: '(\d+)'")
+RE_VIDEO_URL = Regex('recommended_encoding.*"url": "([^"]+)"', Regex.DOTALL)
+
+PLAYER_URL = 'http://player.pbs.org/portalplayer/%s/'
+
+####################################################################################################
+def NormalizeURL(url):
+
+    return url
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+    html = HTML.ElementFromURL(url)
+
+    title = html.xpath('//meta[@property="og:title"]/@content')[0].split(' | ')[0]
+    summary = html.xpath('//meta[@property="og:description"]/@content')[0]
+    thumb = html.xpath('//meta[@property="og:image"]/@content')[0]
+
+    try:
+        airdate = html.xpath('//p[contains(., "Aired:")]/text()')[0].split('Aired:')[-1].strip()
+        airdate = Datetime.ParseDate(airdate).date()
+    except:
+        airdate = None
+
+    try:
+        duration_parts = html.xpath('//span[@class="video-player__info__meta"]/text()')[0].split(' | ')[-1].strip().split(' ')
+        duration = 0
+
+        for value in duration_parts:
+            if 'h' in value:
+                duration += int(value.strip('h')) * 60 * 60 * 1000
+            elif 'm' in value:
+                duration += int(value.strip('m')) * 60 * 1000
+            elif 's' in value:
+                duration += int(value.strip('s')) * 1000
+    except:
+        duration = None
+
+    return VideoClipObject(
+        title = title,
+        summary = summary,
+        originally_available_at = airdate,
+        duration = duration,
+        thumb = Resource.ContentsOfURLWithFallback(url=thumb)
+    )
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+    return [
+        MediaObject(
+            video_codec = VideoCodec.H264,
+            audio_codec = AudioCodec.AAC,
+            container = Container.MP4,
+            video_resolution = '720',
+            audio_channels = 2,
+            optimized_for_streaming = True,
+            parts = [
+                PartObject(key=Callback(PlayVideo, url=url))
+            ]
+        )
+    ]
+
+####################################################################################################
+@indirect
+def PlayVideo(url, **kwargs):
+
+    page = HTTP.Request(url).content
+    video_id = RE_VIDEO_ID.search(page).group(1)
+
+    page = HTTP.Request(PLAYER_URL % (video_id)).content
+    redirect_url = RE_VIDEO_URL.search(page).group(1).replace('https://', 'http://')
+
+    json_obj = JSON.ObjectFromURL('%s?format=json' % (redirect_url))
+
+    if 'status' in json_obj and json_obj['status'] == 'ok':
+        video_url = json_obj['url'].replace('-16x9-720p.m3u8', '-mp4-720p-3000k.mp4')
+        return IndirectResponse(VideoClipObject, key=video_url)
+    else:
+        raise Ex.MediaNotAvailable

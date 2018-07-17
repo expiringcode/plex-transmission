@@ -1,0 +1,150 @@
+DETAILS_URL = 'http://metaframe.digitalsmiths.tv/v2/CWtv/assets/%s/partner/132?format=json'
+BASE_URL = 'http://www.cwtv.com'
+
+RE_BW = Regex('(#.+BANDWIDTH=(\d+),RESOLUTION.+\nhttp.+\.m3u8)')
+
+####################################################################################################
+def NormalizeURL(url):
+
+	return url
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+	data = GetDetails(url)
+
+	if not data:
+		return None
+
+	video = data['assetFields']
+
+	episode_title = video['title']
+	show = video['seriesName']
+
+	try:
+		episode_index = int(video['episodeNumber'])
+	except:
+		episode_index = None
+
+	try:
+		season = int(video['seasonNumber'])
+	except:
+		season = None
+
+	summary = video['description']
+
+	rating = float(video['rating'])
+	if rating == 0:
+		rating = None
+
+	try:
+		date = Datetime.ParseDate(video['originalAirDate'])
+	except:
+		date = None
+
+	try:
+		duration = int(video['duration']) * 1000
+	except:
+		duration = None
+
+	thumb = GetThumb(url)
+
+	if video['contentType'] == "Full Episodes":
+
+		return EpisodeObject(
+			title = episode_title,
+			show = show,
+			index = episode_index,
+			season = season,
+			summary = summary,
+			rating = rating,
+			originally_available_at = date,
+			duration = duration,
+			thumb = Resource.ContentsOfURLWithFallback(thumb)
+		)
+
+	else:
+
+		return VideoClipObject(
+			title = episode_title,
+			summary = summary,
+			rating = rating,
+			originally_available_at = date,
+			duration = duration,
+			thumb = Resource.ContentsOfURLWithFallback(thumb)
+		)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+	return [
+		MediaObject(
+			video_resolution = 720,
+			audio_channels = 2,
+			parts = [
+				PartObject(
+					key = HTTPLiveStreamURL(Callback(Playlist, url=url))
+				)
+			]
+		)
+	]
+
+####################################################################################################
+def Playlist(url, **kwargs):
+
+	data = GetDetails(url)
+	playlist_url = data['videos']['variantplaylist']['uri']
+
+	playlist = HTTP.Request(playlist_url).content
+
+	list = RE_BW.findall(playlist)
+	versions = {}
+
+	for (version, bandwidth) in list:
+
+		versions[bandwidth] = version
+
+	new_playlist = '#EXTM3U'
+
+	for key in sorted(versions.keys(), key=int, reverse=True):
+
+		new_playlist += '\n%s' % (versions[key])
+
+	return new_playlist
+
+####################################################################################################
+def GetDetails(url):
+
+	id = None
+
+	if '?play=' in url:
+		id = url.split('?play=')[1]
+	else:
+		html = HTML.ElementFromURL(url)
+		url = html.xpath('//a[@class="thumbLink"]/@href')
+
+		if len(url) > 0 and '?play=' in url[0]:
+			id = url[0].split('?play=')[1]
+
+	if id:
+		try:
+			return JSON.ObjectFromURL(DETAILS_URL % id)
+		except:
+			raise Ex.MediaExpired
+	else:
+		raise Ex.MediaNotAvailable
+
+####################################################################################################
+def GetThumb(url):
+
+	images = GetDetails(url)['images']
+	width = 0
+
+	for key in images.keys():
+
+		if images[key]['width'] > width:
+
+			thumb = images[key]['uri']
+			width = images[key]['width']
+
+	return thumb

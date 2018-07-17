@@ -1,0 +1,45 @@
+[
+	{
+		"id": "preferhd",
+		"type": "bool",
+		"label": "Prefer HD",
+		"default": "true",
+		"secure": "true"
+	},
+	{
+		"id": "onlyfree",
+		"type": "bool",
+		"label": "Only show free channels",
+		"default": "true",
+		"secure": "true"
+	},
+	{
+		"id": "login",
+		"type": "bool",
+		"label": "Enable login",
+		"default": "false",
+		"secure": "true"
+	},
+	{
+		"id": "email",
+		"type": "text",
+		"label": "E-Mail",
+		"default": "",
+		"secure": "true"
+	},
+	{
+		"id": "password",
+		"type": "text",
+		"option": "hidden",
+		"label": "Password",
+		"default": "",
+		"secure": "true"
+	},
+	{
+		"id": "custom",
+		"type": "bool",
+		"label": "Advanced: Use custom channel listing",
+		"default": "false",
+		"secure": "true"
+	}
+]

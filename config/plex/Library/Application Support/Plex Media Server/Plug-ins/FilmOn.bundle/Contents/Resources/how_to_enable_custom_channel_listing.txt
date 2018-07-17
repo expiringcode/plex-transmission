@@ -1,0 +1,1 @@
+Use the example.xml file to create a file named custom.xml and then edit this file according to your choice.

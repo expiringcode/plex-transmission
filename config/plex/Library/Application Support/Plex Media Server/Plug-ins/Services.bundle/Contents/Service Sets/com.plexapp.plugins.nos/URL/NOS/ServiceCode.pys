@@ -1,0 +1,47 @@
+####################################################################################################
+def MetadataObjectForURL(url):
+
+	html = HTML.ElementFromURL(url)
+	title = html.xpath('//title/text()')[0].split(' | NOS')[0].strip()
+
+	return VideoClipObject(
+		title = title,
+		thumb = Resource.ContentsOfURLWithFallback('')
+	)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+	return [
+		MediaObject(
+			parts = [
+				PartObject(key=Callback(PlayVideo, url=url))
+			],
+			container = Container.MP4,
+			video_codec = VideoCodec.H264,
+			audio_codec = AudioCodec.AAC,
+			video_resolution = 'sd',
+			audio_channels = 2
+		)
+	]
+
+####################################################################################################
+@indirect
+def PlayVideo(url, **kwargs):
+
+	video_url = None
+
+	if '/uitzending/' in url:
+
+		html = HTML.ElementFromURL(url)
+		video_url = html.xpath('//video/source/@src')[-1]
+
+	elif '/video/' in url:
+
+		html = HTML.ElementFromURL('%s?ajax' % (url), headers={'X-Requested-With': 'XMLHttpRequest'})
+		video_url = html.xpath('//video/source/@src')[0]
+
+	if video_url:
+		return IndirectResponse(VideoClipObject, key=video_url)
+	else:
+		raise Ex.MediaNotAvailable

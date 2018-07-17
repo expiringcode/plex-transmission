@@ -1,0 +1,6 @@
+[submodule "config/plex/Library/Application Support/Plex Media Server/Plug-ins/FilmOn.bundle"]
+	path = config/plex/Library/Application Support/Plex Media Server/Plug-ins/FilmOn.bundle
+	url = https://github.com/meriko/FilmOn.bundle
+[submodule "config/plex/Library/Application Support/Plex Media Server/Plug-ins/IPTV.bundle"]
+	path = config/plex/Library/Application Support/Plex Media Server/Plug-ins/IPTV.bundle
+	url = https://github.com/Cigaras/IPTV.bundle

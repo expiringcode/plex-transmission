@@ -1,0 +1,117 @@
+CM_URL = 'http://%s/cm/%s'
+CM_JSON_URL = '%s?mode=json'
+CM_ID = Regex('1\.\d+')
+
+HTTP_HEADERS = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:26.0) Gecko/20100101 Firefox/26.0'}
+
+####################################################################################################
+def NormalizeURL(url):
+
+	id = CM_ID.findall(url)
+
+	if len(id) < 1:
+		return url.split('?')[0]
+
+	return 'http://%s/permalink/%s' % (GetHost(url), id[0])
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+	id = CM_ID.findall(url)
+
+	if len(id) < 1:
+		try:
+			html = HTML.ElementFromURL(url, headers=HTTP_HEADERS)
+		except Ex.HTTPError, e:
+			raise Ex.MediaNotAvailable
+
+		permalink = html.xpath('//a[@title="Permalink"]/@data-popup-text')
+
+		if len(permalink) < 1:
+			raise Ex.MediaNotAvailable
+		else:
+			id = CM_ID.findall(permalink[0])
+
+	cm_url_html = CM_URL % (GetHost(url), id[0])
+	cm_url_json = CM_JSON_URL % (cm_url_html)
+
+	html = HTML.ElementFromString(HTTP.Request(cm_url_html, headers=HTTP_HEADERS).content.replace('&ndash;', '-'))
+
+	# If we have a YouTube video, hand it over to the YouTube URL Service
+	yt_src = html.xpath('//div[contains(@data-video-src, "youtube.com/")]/@data-video-src')
+	if len(yt_src) > 0:
+		return URLService.MetadataObjectForURL(yt_src[0])
+
+	try:
+		json = JSON.ObjectFromURL(cm_url_json, headers=HTTP_HEADERS)
+	except:
+		raise Ex.MediaNotAvailable
+
+	if not 'title' in json:
+		raise Ex.MediaNotAvailable
+
+	title = json['title']
+	thumb = json['imageData']['imageURL']
+
+	if not thumb.startswith('http://'):
+		thumb = 'http://%s/%s' % (GetHost(url), thumb.lstrip('/'))
+
+	try:
+		summary = html.xpath('//div[@class="videoarticle-description"]/p/text()')[0]
+		summary = String.StripTags(summary)
+	except:
+		summary = None
+
+	return VideoClipObject(
+		title = title,
+		summary = summary,
+		thumb = Resource.ContentsOfURLWithFallback(thumb)
+	)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+	return [
+		MediaObject(
+			parts = [
+				PartObject(
+					key=HTTPLiveStreamURL(Callback(PlayVideo, url=url))
+				)
+			],
+			video_resolution = 'sd',
+			audio_channels = 2,
+			optimized_for_streaming = True
+		)
+	]
+
+####################################################################################################
+@indirect
+def PlayVideo(url, **kwargs):
+
+	id = CM_ID.findall(url)
+
+	if len(id) < 1:
+		try:
+			permalink = HTML.ElementFromURL(url, headers=HTTP_HEADERS).xpath('//a[@title="Permalink"]/@data-popup-text')
+		except:
+			raise Ex.MediaExpired
+
+		if len(permalink) < 1:
+			raise Ex.MediaNotAvailable
+		else:
+			id = CM_ID.findall(permalink[0])
+
+	cm_url_html = CM_URL % (GetHost(url), id[0])
+	cm_url_json = CM_JSON_URL % (cm_url_html)
+
+	try:
+		json = JSON.ObjectFromURL(cm_url_json, headers=HTTP_HEADERS)
+	except:
+		raise Ex.MediaExpired
+
+	return IndirectResponse(VideoClipObject, key=json['videoURL'])
+
+####################################################################################################
+def GetHost(url):
+
+	return url.split('/')[2].replace('www.', '')
