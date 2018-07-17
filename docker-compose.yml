@@ -28,8 +28,6 @@ services:
     restart: always
     tty: true
     networks:
-      - tier_3
-      - tier_2
       - tier_1
       - tier_0
   media:
@@ -53,13 +51,9 @@ services:
     restart: always
     tty: true
     networks:
-      - tier_3
       - tier_1
       - tier_0
-      - tier_2
 networks:
-  tier_2: null
-  tier_3: null
   tier_0:
     external:
       name: network_tier_0
