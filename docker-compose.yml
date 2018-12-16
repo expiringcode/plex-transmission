@@ -3,7 +3,7 @@ services:
   plex:
     image: plexinc/pms-docker
     volumes:
-      - './transcode:/app'
+      - './transcode:/transcode'
       - './config/plex:/config'
       - './media:/data'
     ports:
