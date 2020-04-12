@@ -26,7 +26,6 @@ services:
       - HOSTNAME=${PLEX_HOSTNAME}
       - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
     restart: always
-    tty: true
     networks:
       - tier_1
       - tier_0
@@ -49,7 +48,6 @@ services:
       - PGID=1000
       - TZ=ROME
     restart: always
-    tty: true
     networks:
       - tier_1
       - tier_0
