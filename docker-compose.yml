@@ -3,9 +3,9 @@ services:
   plex:
     image: plexinc/pms-docker
     volumes:
-      - './transcode:/transcode'
-      - './config/plex:/config'
-      - './media:/data'
+      - '/mnt/data/transcode:/transcode'
+      - '/mnt/data/plex/config/plex:/config'
+      - '/mnt/data/media:/data'
     ports:
       - 32400:32400/tcp
       - 3005:3005/tcp
@@ -32,25 +32,39 @@ services:
   media:
     image: linuxserver/transmission
     volumes:
-      - './config/ts:/config'
-      - './media:/downloads'
-      - './torrents:/watch'
+      - '/mnt/data/plex/config/ts:/config'
+      - '/mnt/data/media:/downloads'
+      - '/mnt/data/plex/torrents:/watch'
     ports:
-      - "9091:9091"
       - "51413:51413"
       - "51413:51413/udp"
     environment:
-      - VIRTUAL_HOST=${VIRTUAL_HOST_TS}
-      - VIRTUAL_PORT=9091
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=${VIRTUAL_HOST_TS}
       - PUID=1000
       - PGID=1000
       - TZ=ROME
     restart: always
     networks:
-      - tier_1
+      - tier_2
+
+  flood:
+    image: jesec/flood
+    user: 1000:1000
+    volumes:
+      - /mnt/data/plex/config/flood:/config
+      - /mnt/data/media:/data
+    environment:
+      - VIRTUAL_HOST=${VIRTUAL_HOST_TS}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=${VIRTUAL_HOST_TS}
+      - VIRTUAL_PORT=3000
+    command: 
+      --allowedpath /data --trurl http://media:9091/rpc/ --truser progress44 --trpass 12688abcd --auth default --host 0.0.0.0 --rundir /config
+    networks:
       - tier_0
+      - tier_1
+      - tier_2
+
+
 networks:
   tier_0:
     external:
@@ -58,3 +72,4 @@ networks:
   tier_1:
     external:
       name: network_tier_1
+  tier_2:
