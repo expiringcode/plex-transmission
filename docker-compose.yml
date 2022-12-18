@@ -1,11 +1,11 @@
-version: '3'
+version: "3"
 services:
   plex:
     image: plexinc/pms-docker
     volumes:
-      - '/mnt/data/transcode:/transcode'
-      - '/mnt/data/plex/config/plex:/config'
-      - '/mnt/data/media:/data'
+      - "/mnt/data/transcode:/transcode"
+      - "/mnt/data/plex/config/plex:/config"
+      - "/mnt/data/media:/data"
     ports:
       - 32400:32400/tcp
       - 3005:3005/tcp
@@ -25,16 +25,16 @@ services:
       - PLEX_CLAIM=${PLEX_CLAIM}
       - HOSTNAME=${PLEX_HOSTNAME}
       - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
-    restart: always
+    restart: unless-stopped
     networks:
       - tier_1
       - tier_0
   media:
     image: linuxserver/transmission
     volumes:
-      - '/mnt/data/plex/config/ts:/config'
-      - '/mnt/data/media:/downloads'
-      - '/mnt/data/plex/torrents:/watch'
+      - "/mnt/data/plex/config/ts:/config"
+      - "/mnt/data/media:/media"
+      - "/mnt/data/plex/torrents:/watch"
     ports:
       - "51413:51413"
       - "51413:51413/udp"
@@ -42,34 +42,109 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=ROME
-    restart: always
+      - VIRTUAL_HOST=ts.${VIRTUAL_HOST_TS}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=ts.${VIRTUAL_HOST_TS}
+      - VIRTUAL_PORT=9091
+    restart: unless-stopped
     networks:
       - tier_2
 
   flood:
     image: jesec/flood
     user: 1000:1000
+    restart: unless-stopped
     volumes:
       - /mnt/data/plex/config/flood:/config
-      - /mnt/data/media:/data
+      - /mnt/data/media:/media
     environment:
       - VIRTUAL_HOST=${VIRTUAL_HOST_TS}
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
       - LETSENCRYPT_HOST=${VIRTUAL_HOST_TS}
       - VIRTUAL_PORT=3000
-    command: 
-      --allowedpath /data --trurl http://media:9091/rpc/ --truser progress44 --trpass 12688abcd --auth default --host 0.0.0.0 --rundir /config
+    command: --allowedpath /media --trurl http://media:9091/rpc/ --truser progress44 --trpass 12688abcd --auth default --host 0.0.0.0 --rundir /config
     networks:
-      - tier_0
       - tier_1
       - tier_2
 
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - VIRTUAL_HOST=radarr.${PLEX_HOSTNAME}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=radarr.${PLEX_HOSTNAME}
+      - VIRTUAL_PORT=7878
+    volumes:
+      - /mnt/data/plex/config/radarr:/config
+      - /mnt/data/media:/media
+    restart: unless-stopped
+    networks:
+      - tier_1
+      - tier_2
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - VIRTUAL_HOST=sonarr.${PLEX_HOSTNAME}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=sonarr.${PLEX_HOSTNAME}
+      - VIRTUAL_PORT=8989
+    volumes:
+      - /mnt/data/plex/config/sonarr:/config
+      - /mnt/data/media:/media
+    restart: unless-stopped
+    networks:
+      - tier_1
+      - tier_2
+
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - VIRTUAL_HOST=jackett.${PLEX_HOSTNAME}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=jackett.${PLEX_HOSTNAME}
+      - VIRTUAL_PORT=9117
+      - AUTO_UPDATE=true #optional
+    volumes:
+      - /mnt/data/plex/config/jackett:/config
+      - /mnt/data/media:/downloads
+    restart: unless-stopped
+    networks:
+      - tier_1
+      - tier_2
+
+  tautulli:
+    image: tautulli/tautulli
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - VIRTUAL_HOST=tautulli.${PLEX_HOSTNAME}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
+      - LETSENCRYPT_HOST=tautulli.${PLEX_HOSTNAME}
+      - VIRTUAL_PORT=8181
+    volumes:
+      - /mnt/data/plex/config/tautulli:/config
+      - "/mnt/data/plex/config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
+    depends_on:
+      - plex
+    networks:
+      - tier_1
+      - tier_2
 
 networks:
   tier_0:
-    external:
-      name: network_tier_0
+    name: network_tier_0
   tier_1:
-    external:
-      name: network_tier_1
+    name: network_tier_1
   tier_2:
