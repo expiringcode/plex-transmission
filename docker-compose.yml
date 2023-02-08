@@ -1,30 +1,30 @@
 version: "3"
 services:
   plex:
-    image: plexinc/pms-docker
+    image: lscr.io/linuxserver/plex:latest
     volumes:
-      - "/mnt/data/transcode:/transcode"
-      - "/mnt/data/plex/config/plex:/config"
-      - "/mnt/data/media:/data"
+      - "${ROOT}/config/plex/transcode:/tmp/Transcode"
+      - "${ROOT}/config/plex/config:/config"
+      - "${ROOT}/media:/data"
     ports:
       - 32400:32400/tcp
-      - 3005:3005/tcp
-      - 8324:8324/tcp
-      - 32469:32469/tcp
-      - 1900:1900/udp
-      - 32410:32410/udp
-      - 32412:32412/udp
-      - 32413:32413/udp
-      - 32414:32414/udp
+      # only enable for local services
+      # - 8324:8324/tcp
+      # - 32469:32469/tcp
+      # - 1900:1900/udp
+      # - 32410:32410/udp
+      # - 32412:32412/udp
+      # - 32413:32413/udp
+      # - 32414:32414/udp
     environment:
-      - VIRTUAL_HOST=${VIRTUAL_HOST_PLEX}
+      - VIRTUAL_HOST=plex.${VIRTUAL_HOST},advertise.plex.${VIRTUAL_HOST}:32400
       - VIRTUAL_PORT=32400
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_PLEX}
-      - LETSENCRYPT_HOST=${VIRTUAL_HOST_PLEX}
-      - TZ=ROME
+      - LETSENCRYPT_HOST=plex.${VIRTUAL_HOST}
+      - TZ=Europe/Stockholm
       - PLEX_CLAIM=${PLEX_CLAIM}
-      - HOSTNAME=${PLEX_HOSTNAME}
-      - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+      - HOSTNAME=plex.${VIRTUAL_HOST}
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
     restart: unless-stopped
     networks:
       - tier_1
@@ -32,116 +32,136 @@ services:
   media:
     image: linuxserver/transmission
     volumes:
-      - "/mnt/data/plex/config/ts:/config"
-      - "/mnt/data/media:/media"
-      - "/mnt/data/plex/torrents:/watch"
+      - "${ROOT}/config/ts:/config"
+      - "${ROOT}/media:/media"
+      - "${ROOT}/media/torrents:/watch"
     ports:
       - "51413:51413"
       - "51413:51413/udp"
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=ROME
-      - VIRTUAL_HOST=ts.${VIRTUAL_HOST_TS}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=ts.${VIRTUAL_HOST_TS}
-      - VIRTUAL_PORT=9091
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
+      - TZ=Europe/Stockholm
     restart: unless-stopped
     networks:
       - tier_2
-
   flood:
     image: jesec/flood
-    user: 1000:1000
+    user: 1046:1046
     restart: unless-stopped
     volumes:
-      - /mnt/data/plex/config/flood:/config
-      - /mnt/data/media:/media
+      - ${ROOT}/config/flood:/config
+      - ${ROOT}/media:/media
     environment:
-      - VIRTUAL_HOST=${VIRTUAL_HOST_TS}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=${VIRTUAL_HOST_TS}
+      - VIRTUAL_HOST=flood.${PRIVATE_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=flood.${PRIVATE_VIRTUAL_HOST}
       - VIRTUAL_PORT=3000
     command: --allowedpath /media --trurl http://media:9091/rpc/ --truser progress44 --trpass 12688abcd --auth default --host 0.0.0.0 --rundir /config
     networks:
       - tier_1
       - tier_2
-
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=radarr.${PLEX_HOSTNAME}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=radarr.${PLEX_HOSTNAME}
+      - VIRTUAL_HOST=radarr.${PRIVATE_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=radarr.${PRIVATE_VIRTUAL_HOST}
       - VIRTUAL_PORT=7878
     volumes:
-      - /mnt/data/plex/config/radarr:/config
-      - /mnt/data/media:/media
+      - ${ROOT}/config/radarr:/config
+      - ${ROOT}/media:/media
     restart: unless-stopped
     networks:
       - tier_1
       - tier_2
-
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=sonarr.${PLEX_HOSTNAME}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=sonarr.${PLEX_HOSTNAME}
+      - VIRTUAL_HOST=sonarr.${PRIVATE_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=sonarr.${PRIVATE_VIRTUAL_HOST}
       - VIRTUAL_PORT=8989
     volumes:
-      - /mnt/data/plex/config/sonarr:/config
-      - /mnt/data/media:/media
+      - ${ROOT}/config/sonarr:/config
+      - ${ROOT}/media:/media
     restart: unless-stopped
     networks:
       - tier_1
       - tier_2
-
-  jackett:
-    image: lscr.io/linuxserver/jackett:latest
+  ## Switched with Prowlarr
+  # jackett:
+  #   image: lscr.io/linuxserver/jackett:latest
+  #   environment:
+  #     - PUID=${MEDIA_UID}
+  #     - PGID=${MEDIA_GID}
+  #     - TZ=Europe/Stockholm
+  #     - VIRTUAL_HOST=jackett.${VIRTUAL_HOST}
+  #     - LETSENCRYPT_HOST=jackett.${VIRTUAL_HOST}
+  #     - VIRTUAL_PORT=9117
+  #     - AUTO_UPDATE=true #optional
+  #   volumes:
+  #     - ${ROOT}/plex/config/jackett:/config
+  #     - ${ROOT}/media:/downloads
+  #   restart: unless-stopped
+  #   networks:
+  #     - tier_1
+  #     - tier_2
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=jackett.${PLEX_HOSTNAME}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=jackett.${PLEX_HOSTNAME}
-      - VIRTUAL_PORT=9117
-      - AUTO_UPDATE=true #optional
+      - VIRTUAL_PORT=9696
+      - VIRTUAL_HOST=prowlarr.${PRIVATE_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=prowlarr.${PRIVATE_VIRTUAL_HOST}
     volumes:
-      - /mnt/data/plex/config/jackett:/config
-      - /mnt/data/media:/downloads
+      - ${ROOT}/config/prowlarr:/config
     restart: unless-stopped
     networks:
       - tier_1
       - tier_2
-
   tautulli:
     image: tautulli/tautulli
     restart: unless-stopped
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=tautulli.${PLEX_HOSTNAME}
-      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL_TS}
-      - LETSENCRYPT_HOST=tautulli.${PLEX_HOSTNAME}
+      - VIRTUAL_HOST=tautulli.${PRIVATE_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=tautulli.${PRIVATE_VIRTUAL_HOST}
       - VIRTUAL_PORT=8181
     volumes:
-      - /mnt/data/plex/config/tautulli:/config
-      - "/mnt/data/plex/config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
+      - ${ROOT}/config/tautulli:/config
+      - "${ROOT}/config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
     depends_on:
       - plex
     networks:
       - tier_1
       - tier_2
 
+  wireguard:
+    image: linuxserver/wireguard
+    restart: unless-stopped
+    ports:
+      - 51820:51820/udp
+    environment:
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
+      - TZ=Europe/Stockholm
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ${ROOT}/config/wireguard:/config
+    networks:
+      - tier_1
+      - tier_2
 networks:
   tier_0:
     name: network_tier_0
