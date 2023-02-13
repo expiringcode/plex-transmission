@@ -8,14 +8,6 @@ services:
       - "${ROOT}/media:/data"
     ports:
       - 32400:32400/tcp
-      # only enable for local services
-      # - 8324:8324/tcp
-      # - 32469:32469/tcp
-      # - 1900:1900/udp
-      # - 32410:32410/udp
-      # - 32412:32412/udp
-      # - 32413:32413/udp
-      # - 32414:32414/udp
     environment:
       - VIRTUAL_HOST=plex.${VIRTUAL_HOST},advertise.plex.${VIRTUAL_HOST}:32400
       - VIRTUAL_PORT=32400
@@ -29,22 +21,46 @@ services:
     networks:
       - tier_1
       - tier_0
+  gluetun:
+    container_name: gluetun
+    image: qmcgaw/gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=0
+    volumes:
+      - ${ROOT}/config/gluetun:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=custom #mullvad
+      - VPN_TYPE=wireguard
+      # can use the below when setting provider to mullvad
+      # - SERVER_CITIES=Stockholm
+      - VPN_ENDPOINT_IP=${WIREGUARD_ENDPOINT} # not needed with mullvad
+      - VPN_ENDPOINT_PORT=${WIREGUARD_PORT} # not needed with mullvad
+      - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY} # not needed with mullvad
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+    ports:
+      - ${WIREGUARD_PORT}:${WIREGUARD_PORT}/udp
+      - ${WIREGUARD_FORWARDED_PORT}:${WIREGUARD_FORWARDED_PORT}/tcp
+      - ${WIREGUARD_FORWARDED_PORT}:${WIREGUARD_FORWARDED_PORT}/udp #56512
+    networks:
+      - tier_1
+      - tier_2
   media:
     image: linuxserver/transmission
     volumes:
       - "${ROOT}/config/ts:/config"
       - "${ROOT}/media:/media"
       - "${ROOT}/media/torrents:/watch"
-    ports:
-      - "51413:51413"
-      - "51413:51413/udp"
     environment:
       - PUID=${MEDIA_UID}
       - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
     restart: unless-stopped
-    networks:
-      - tier_2
+    network_mode: service:gluetun
   flood:
     image: jesec/flood
     user: 1046:1046
@@ -56,7 +72,7 @@ services:
       - VIRTUAL_HOST=flood.${PRIVATE_VIRTUAL_HOST}
       - LETSENCRYPT_HOST=flood.${PRIVATE_VIRTUAL_HOST}
       - VIRTUAL_PORT=3000
-    command: --allowedpath /media --trurl http://media:9091/rpc/ --truser progress44 --trpass 12688abcd --auth default --host 0.0.0.0 --rundir /config
+    command: --allowedpath /media --auth default --host 0.0.0.0 --rundir /config
     networks:
       - tier_1
       - tier_2
@@ -92,24 +108,6 @@ services:
     networks:
       - tier_1
       - tier_2
-  ## Switched with Prowlarr
-  # jackett:
-  #   image: lscr.io/linuxserver/jackett:latest
-  #   environment:
-  #     - PUID=${MEDIA_UID}
-  #     - PGID=${MEDIA_GID}
-  #     - TZ=Europe/Stockholm
-  #     - VIRTUAL_HOST=jackett.${VIRTUAL_HOST}
-  #     - LETSENCRYPT_HOST=jackett.${VIRTUAL_HOST}
-  #     - VIRTUAL_PORT=9117
-  #     - AUTO_UPDATE=true #optional
-  #   volumes:
-  #     - ${ROOT}/plex/config/jackett:/config
-  #     - ${ROOT}/media:/downloads
-  #   restart: unless-stopped
-  #   networks:
-  #     - tier_1
-  #     - tier_2
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     environment:
@@ -144,24 +142,6 @@ services:
       - tier_1
       - tier_2
 
-  wireguard:
-    image: linuxserver/wireguard
-    restart: unless-stopped
-    ports:
-      - 51820:51820/udp
-    environment:
-      - PUID=${MEDIA_UID}
-      - PGID=${MEDIA_GID}
-      - TZ=Europe/Stockholm
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-    cap_add:
-      - NET_ADMIN
-    volumes:
-      - ${ROOT}/config/wireguard:/config
-    networks:
-      - tier_1
-      - tier_2
 networks:
   tier_0:
     name: network_tier_0
