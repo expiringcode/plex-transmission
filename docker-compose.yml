@@ -23,7 +23,7 @@ services:
       - tier_0
   gluetun:
     container_name: gluetun
-    image: qmcgaw/gluetun
+    image: qmcgaw/gluetun:latest
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -42,6 +42,11 @@ services:
       - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY} # not needed with mullvad
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - VIRTUAL_PORT=9091
+      - VIRTUAL_HOST=ts.${PRIVATE_VIRTUAL_HOST}
+    expose:
+      - 9091
+      - ${WIREGUARD_FORWARDED_PORT}
     ports:
       - ${WIREGUARD_PORT}:${WIREGUARD_PORT}/udp
       - ${WIREGUARD_FORWARDED_PORT}:${WIREGUARD_FORWARDED_PORT}/tcp
@@ -50,7 +55,7 @@ services:
       - tier_1
       - tier_2
   media:
-    image: linuxserver/transmission
+    image: lscr.io/linuxserver/transmission:latest
     volumes:
       - "${ROOT}/config/ts:/config"
       - "${ROOT}/media:/media"
@@ -62,7 +67,7 @@ services:
     restart: unless-stopped
     network_mode: service:gluetun
   flood:
-    image: jesec/flood
+    image: jesec/flood:latest
     user: 1046:1046
     restart: unless-stopped
     volumes:
@@ -124,7 +129,7 @@ services:
       - tier_1
       - tier_2
   tautulli:
-    image: tautulli/tautulli
+    image: tautulli/tautulli:latest
     restart: unless-stopped
     environment:
       - PUID=${MEDIA_UID}
