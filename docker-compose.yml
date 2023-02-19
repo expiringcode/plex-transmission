@@ -44,13 +44,12 @@ services:
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
       - VIRTUAL_PORT=9091
       - VIRTUAL_HOST=ts.${PRIVATE_VIRTUAL_HOST}
+      - FIREWALL_VPN_INPUT_PORTS=${WIREGUARD_FORWARDED_PORT}
     expose:
       - 9091
       - ${WIREGUARD_FORWARDED_PORT}
     ports:
       - ${WIREGUARD_PORT}:${WIREGUARD_PORT}/udp
-      - ${WIREGUARD_FORWARDED_PORT}:${WIREGUARD_FORWARDED_PORT}/tcp
-      - ${WIREGUARD_FORWARDED_PORT}:${WIREGUARD_FORWARDED_PORT}/udp #56512
     networks:
       - tier_1
       - tier_2
@@ -124,6 +123,21 @@ services:
       - LETSENCRYPT_HOST=prowlarr.${PRIVATE_VIRTUAL_HOST}
     volumes:
       - ${ROOT}/config/prowlarr:/config
+    restart: unless-stopped
+    networks:
+      - tier_1
+      - tier_2
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    environment:
+      - PUID=${MEDIA_UID}
+      - PGID=${MEDIA_GID}
+      - TZ=Europe/Stockholm
+      - VIRTUAL_PORT=5055
+      - VIRTUAL_HOST=overseerr.${VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=overseerr.${VIRTUAL_HOST}
+    volumes:
+      - ${ROOT}/config/overseerr:/config
     restart: unless-stopped
     networks:
       - tier_1
