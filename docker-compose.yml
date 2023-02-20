@@ -67,7 +67,7 @@ services:
     network_mode: service:gluetun
   flood:
     image: jesec/flood:latest
-    user: 1046:1046
+    user: ${MEDIA_UID}:${MEDIA_UID}
     restart: unless-stopped
     volumes:
       - ${ROOT}/config/flood:/config
