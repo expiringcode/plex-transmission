@@ -23,7 +23,7 @@ services:
       - tier_0
   gluetun:
     container_name: gluetun
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun:v3
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
