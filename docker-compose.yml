@@ -178,7 +178,7 @@ services:
       - traefik.http.routers.tautulli.rule=Host(`tautulli.${VIRTUAL_HOST}`)
       - traefik.http.routers.tautulli.service=tautulli
       - traefik.http.services.tautulli.loadbalancer.server.port=8181
-      - traefik.http.routers.flood.middlewares=secure
+      - traefik.http.routers.tautulli.middlewares=secure
     volumes:
       - ${ROOT}/config/tautulli:/config
       - "${ROOT}/config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
