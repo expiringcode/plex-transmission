@@ -9,6 +9,7 @@ networks:
 
 services:
   plex:
+    container_name: ${COMPOSE_PROJECT_NAME}.plex
     image: lscr.io/linuxserver/plex:latest
     volumes:
       - "${ROOT}/config/plex/transcode:/tmp/Transcode"
@@ -17,9 +18,6 @@ services:
     ports:
       - 32400:32400/tcp
     environment:
-      - VIRTUAL_HOST=plex.${VIRTUAL_HOST},advertise.plex.${VIRTUAL_HOST}:32400
-      - VIRTUAL_PORT=32400
-      - LETSENCRYPT_HOST=plex.${VIRTUAL_HOST}
       - TZ=Europe/Stockholm
       - PLEX_CLAIM=${PLEX_CLAIM}
       - HOSTNAME=plex.${VIRTUAL_HOST}
@@ -28,15 +26,17 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.plex.entrypoints=websecure
-      - traefik.http.routers.plex.rule=Host(`plex.${VIRTUAL_HOST}`,`advertise.plex.${VIRTUAL_HOST}`)
+      - traefik.http.routers.plex.rule=Host(`plex.${VIRTUAL_HOST}`)
       - traefik.http.routers.plex.service=plex
       - traefik.http.services.plex.loadbalancer.server.port=32400
+      - traefik.http.routers.plex.middlewares=secure-noauth
     restart: unless-stopped
     networks:
       - edge
       - local
   media:
     image: lscr.io/linuxserver/transmission:latest
+    container_name: ${COMPOSE_PROJECT_NAME}.ts
     volumes:
       - "${ROOT}/config/ts:/config"
       - "${ROOT}/media:/media"
@@ -48,44 +48,39 @@ services:
     restart: unless-stopped
     network_mode: container:${VPN_CONTAINER}
   flood:
+    container_name: ${COMPOSE_PROJECT_NAME}.flood
     image: jesec/flood:latest
     user: ${MEDIA_UID}:${MEDIA_UID}
     restart: unless-stopped
     volumes:
       - ${ROOT}/config/flood:/config
       - ${ROOT}/media:/media
-    environment:
-      - VIRTUAL_HOST=flood.${PRIVATE_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=flood.${PRIVATE_VIRTUAL_HOST}
-      - VIRTUAL_PORT=3000
     labels:
       - traefik.enable=true
       - traefik.http.routers.flood-ts.entrypoints=websecure
       - traefik.http.routers.flood-ts.rule=Host(`flood.${VIRTUAL_HOST}`)
       - traefik.http.routers.flood-ts.service=flood-ts
       - traefik.http.services.flood-ts.loadbalancer.server.port=3000
-      - traefik.http.routers.flood-ts.middlewares=secure
+      - traefik.http.routers.flood-ts.middlewares=secure-auth
     command: --allowedpath /media --auth default --host 0.0.0.0 --rundir /config
     networks:
       - edge
       - local
       - internal
   radarr:
+    container_name: ${COMPOSE_PROJECT_NAME}.radarr
     image: lscr.io/linuxserver/radarr:latest
     environment:
       - PUID=${MEDIA_UID}
       - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=radarr.${PRIVATE_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=radarr.${PRIVATE_VIRTUAL_HOST}
-      - VIRTUAL_PORT=7878
     labels:
       - traefik.enable=true
       - traefik.http.routers.radarr.entrypoints=websecure
       - traefik.http.routers.radarr.rule=Host(`radarr.${VIRTUAL_HOST}`)
       - traefik.http.routers.radarr.service=radarr
       - traefik.http.services.radarr.loadbalancer.server.port=7878
-      - traefik.http.routers.radarr.middlewares=secure
+      - traefik.http.routers.radarr.middlewares=secure-auth
     volumes:
       - ${ROOT}/config/radarr:/config
       - ${ROOT}/media:/media
@@ -95,21 +90,19 @@ services:
       - local
       - internal
   sonarr:
+    container_name: ${COMPOSE_PROJECT_NAME}.sonarr
     image: lscr.io/linuxserver/sonarr:latest
     environment:
       - PUID=${MEDIA_UID}
       - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=sonarr.${PRIVATE_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=sonarr.${PRIVATE_VIRTUAL_HOST}
-      - VIRTUAL_PORT=8989
     labels:
       - traefik.enable=true
       - traefik.http.routers.sonarr.entrypoints=websecure
       - traefik.http.routers.sonarr.rule=Host(`sonarr.${VIRTUAL_HOST}`)
       - traefik.http.routers.sonarr.service=sonarr
       - traefik.http.services.sonarr.loadbalancer.server.port=8989
-      - traefik.http.routers.sonarr.middlewares=secure
+      - traefik.http.routers.sonarr.middlewares=secure-auth
     volumes:
       - ${ROOT}/config/sonarr:/config
       - ${ROOT}/media:/media
@@ -119,21 +112,19 @@ services:
       - local
       - internal
   prowlarr:
+    container_name: ${COMPOSE_PROJECT_NAME}.prowlarr
     image: lscr.io/linuxserver/prowlarr:latest
     environment:
       - PUID=${MEDIA_UID}
       - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_PORT=9696
-      - VIRTUAL_HOST=prowlarr.${PRIVATE_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=prowlarr.${PRIVATE_VIRTUAL_HOST}
     labels:
       - traefik.enable=true
       - traefik.http.routers.prowlarr.entrypoints=websecure
       - traefik.http.routers.prowlarr.rule=Host(`prowlarr.${VIRTUAL_HOST}`)
       - traefik.http.routers.prowlarr.service=prowlarr
       - traefik.http.services.prowlarr.loadbalancer.server.port=9696
-      - traefik.http.routers.prowlarr.middlewares=secure
+      - traefik.http.routers.prowlarr.middlewares=secure-auth
     volumes:
       - ${ROOT}/config/prowlarr:/config
     restart: unless-stopped
@@ -142,20 +133,19 @@ services:
       - local
       - internal
   overseerr:
+    container_name: ${COMPOSE_PROJECT_NAME}.overseerr
     image: lscr.io/linuxserver/overseerr:latest
     environment:
       - PUID=${MEDIA_UID}
       - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_PORT=5055
-      - VIRTUAL_HOST=overseerr.${VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=overseerr.${VIRTUAL_HOST}
     labels:
       - traefik.enable=true
       - traefik.http.routers.overseerr.entrypoints=websecure
       - traefik.http.routers.overseerr.rule=Host(`overseerr.a.progress44.com`)
       - traefik.http.routers.overseerr.service=overseerr
       - traefik.http.services.overseerr.loadbalancer.server.port=5055
+      - traefik.http.routers.overseerr.middlewares=secure-noauth
     volumes:
       - ${ROOT}/config/overseerr:/config
     restart: unless-stopped
@@ -163,22 +153,20 @@ services:
       - edge
       - local
   tautulli:
+    container_name: ${COMPOSE_PROJECT_NAME}.tautulli
     image: tautulli/tautulli:latest
     restart: unless-stopped
     environment:
       - PUID=${MEDIA_UID}
       - PGID=${MEDIA_GID}
       - TZ=Europe/Stockholm
-      - VIRTUAL_HOST=tautulli.${PRIVATE_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=tautulli.${PRIVATE_VIRTUAL_HOST}
-      - VIRTUAL_PORT=8181
     labels:
       - traefik.enable=true
       - traefik.http.routers.tautulli.entrypoints=websecure
       - traefik.http.routers.tautulli.rule=Host(`tautulli.${VIRTUAL_HOST}`)
       - traefik.http.routers.tautulli.service=tautulli
       - traefik.http.services.tautulli.loadbalancer.server.port=8181
-      - traefik.http.routers.tautulli.middlewares=secure
+      - traefik.http.routers.tautulli.middlewares=secure-auth
     volumes:
       - ${ROOT}/config/tautulli:/config
       - "${ROOT}/config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
