@@ -14,6 +14,7 @@ services:
     volumes:
       - "${ROOT}/config/plex/transcode:/tmp/Transcode"
       - "${ROOT}/config/plex/config:/config"
+      - ${ROOT}/config/xteve/data:/xteve/data:rw
       - "${ROOT}/media:/data"
     ports:
       - 32400:32400/tcp
@@ -34,6 +35,7 @@ services:
     networks:
       - edge
       - local
+      - internal
   media:
     image: lscr.io/linuxserver/transmission:latest
     container_name: ${COMPOSE_PROJECT_NAME}.ts
@@ -175,3 +177,15 @@ services:
     networks:
       - edge
       - local
+  xteve:
+    image: tnwhitwell/xteve
+    container_name: ${COMPOSE_PROJECT_NAME}.xteve
+    restart: unless-stopped
+    network_mode: container:${VPN_CONTAINER}
+    environment:
+      - TZ=Europe/Stockholm
+      - XTEVE_PORT=34400
+    volumes:
+      - ${ROOT}/config/xteve/home:/home/xteve/conf:rw
+      - ${ROOT}/config/xteve/data:/config/data:rw
+      - /dev/shm:/tmp/xteve
