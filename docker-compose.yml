@@ -36,6 +36,12 @@ services:
       - edge
       - local
       - internal
+    # healthcheck:
+    #   test: curl --connect-timeout 15 --silent --show-error --fail http://localhost:32400/identity
+    #   interval: 1m00s
+    #   timeout: 15s
+    #   retries: 3
+    #   start_period: 1m00s
   media:
     image: lscr.io/linuxserver/transmission:latest
     container_name: ${COMPOSE_PROJECT_NAME}.ts
@@ -189,3 +195,10 @@ services:
       - ${ROOT}/config/xteve/home:/home/xteve/conf:rw
       - ${ROOT}/config/xteve/data:/config/data:rw
       - /dev/shm:/tmp/xteve
+  # wait-for:
+  #   image: owncloudci/wait-for:latest
+  #   command: --it ${VPN_CONTAINER}:9001 -t ${TIMEOUT}
+  #   networks:
+  #     - local
+  #     - internal
+  #     - socket
