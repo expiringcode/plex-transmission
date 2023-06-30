@@ -200,15 +200,6 @@ services:
       - ${ROOT}/config/xteve/home:/home/xteve/conf:rw
       - ${ROOT}/config/xteve/data:/config/data:rw
       - /dev/shm:/tmp/xteve
-<<<<<<< Updated upstream
-  # wait-for:
-  #   image: owncloudci/wait-for:latest
-  #   command: --it ${VPN_CONTAINER}:9001 -t ${TIMEOUT}
-  #   networks:
-  #     - local
-  #     - internal
-  #     - socket
-=======
     # depends_on:
     #   wait-for:
     #     condition: service_healthy
@@ -219,4 +210,3 @@ services:
       - local
       - internal
       - socket
->>>>>>> Stashed changes
